@@ -1,0 +1,25 @@
+---
+- name: Check consul version
+  shell: "consul --version | head -n1 | grep {{ consul_version }}"
+  failed_when: False
+  changed_when: False
+  register: current_consul_version
+
+- name: Determine consul checksums
+  uri: url="https://releases.hashicorp.com/consul/{{ consul_version }}/consul_{{ consul_version }}_SHA256SUMS"
+       method="GET"
+       return_content=True
+  register: consul_checksums
+
+- name: Download consul
+  get_url: url="https://releases.hashicorp.com/consul/{{ consul_version }}/consul_{{ consul_version }}_linux_amd64.zip"
+           dest="{{ download_dir }}/consul_{{ consul_version }}_linux_amd64.zip"
+           checksum="sha256:{{ item.split(' ') | first }}"
+  with_items: "{{ consul_checksums.content.split('\n') | select('search', 'linux_amd64') | list | first }}"
+  register: consul_downloaded
+
+- name: Extract and install consul
+  unarchive: src="{{ download_dir }}/consul_{{ consul_version }}_linux_amd64.zip"
+             dest=/usr/local/bin
+             copy=no
+  when: current_consul_version.rc != 0 or consul_downloaded | changed
